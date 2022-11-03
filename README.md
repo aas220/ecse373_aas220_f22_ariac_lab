@@ -1,5 +1,5 @@
-### HOW TO RUN CODE
-## 1. Download code to ecse_373_ariac_ws/src
+# HOW TO RUN CODE
+## 1. Download code to ecse_373_ariac_ws/src/ariac_lab
 ## 2. Run `catkin_make` on the code
 ## 3. source `devel/setup.bash`
 ## 4. Launch the competition environment `roslaunch ecse_373_ariac ecse_373_ariac.launch`
