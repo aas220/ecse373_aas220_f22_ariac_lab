@@ -9,6 +9,8 @@
 #include "tf2_ros/transform_listener.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "geometry_msgs/TransformStamped.h"
+#include "sensor_msgs/JointState.h"
+#include "ur_kinematics/ur_kin.h"
 tf2_ros::Buffer tfBuffer;
 std_srvs::Trigger begin_comp;
 std_srvs::SetBool my_bool_var;
@@ -28,7 +30,16 @@ osrf_gear::LogicalCameraImage binImage8;
 osrf_gear::LogicalCameraImage binImage9;
 osrf_gear::LogicalCameraImage binImage10;
 geometry_msgs::PoseStamped part_pose, goal_pose;
+sensor_msgs::JointState jointState;
 
+void t_matrix(double* matrix, double x, double y, double z) {
+	
+	*(matrix + 3) = x;
+	*(matrix + 7) = y;
+	*(matrix + 11) = z;
+	
+
+}
 void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
 		binImage1 == cameraResponse;
 		//ROS_INFO_STREAM("Camera Response" << binImage1);
@@ -81,6 +92,9 @@ void order_callback(const osrf_gear::Order in_order) {
 	ROS_INFO_STREAM("order size in callback " <<orders.size());
 }
 
+void joint_callback(sensor_msgs::JointState current_joint) {
+	jointState = current_joint;
+}
 
 int main(int argc, char** argv) {
 	ros::init(argc, argv, "ariac_lab");
@@ -88,6 +102,12 @@ int main(int argc, char** argv) {
 	orders.clear();
 	ros::ServiceClient begin_client = n.serviceClient<std_srvs::Trigger>("ariac/start_competition");
 	int service_call_succeeded;
+	float q[] = { 3.14, -1.13, 1.51, 3.77, -1.51, 0 };
+	float T[4][4];
+	ur_kinematics::forward((double*)&q[0], (double*) & T[0][0]);
+	float q_sols[8][6];
+	int num_sol;
+	num_sol = ur_kinematics::inverse( & T[0][0], &q[0][0], 0.0);
 	service_call_succeeded = begin_client.call(begin_comp);
 	if (!service_call_succeeded) {
 		ROS_ERROR("Competition service call failed! Oh me oh my");
@@ -114,7 +134,17 @@ int main(int argc, char** argv) {
 	ros::Subscriber faulty1 = n.subscribe("/ariac/quality_control_sensor_1", 15, camera_callback9);
 	ros::Subscriber faulty2 = n.subscribe("/ariac/quality_control_sensor_2", 15, camera_callback10);
 	ros::Subscriber orderSubscriber = n.subscribe<osrf_gear::Order>("/ariac/orders", 1, order_callback);
+	ros::Subscriber jointState = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1, joint_callback);
+	double  stand_in[4][4] = { {0.0, -1.0, 0.0, -100}, \
+{0.0, 0.0, 1.0, -100}, \
+{-1.0, 0.0, 0.0 , -100}, \
+{0.0, 0.0, 0.0, 1.0} };
+	double x = 3;
+	double y = 4;
+	double z = 5;
+	t_matrix((double*)stand_in, x, y, z);
 	while (ros::ok()) {
+		ros::MultiThreadedSpinner spinner(4);
 		if (orders.size() > 0) {
 			ROS_INFO_STREAM("We have orders");
 			for (osrf_gear::Shipment currentShip : orders[0].shipments) {
@@ -225,7 +255,8 @@ int main(int argc, char** argv) {
 			}
 			
 		ros::Duration(5.0).sleep();
-		ros::spinOnce();
+		spinner.spin();
+		ROS_INFO_STREAM(jointState);
 	}
 
 	return  0;
