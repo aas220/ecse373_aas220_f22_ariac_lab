@@ -11,6 +11,10 @@
 #include "geometry_msgs/TransformStamped.h"
 #include "sensor_msgs/JointState.h"
 #include "ur_kinematics/ur_kin.h"
+#include<array> 
+#include <iostream>
+#include <experimental/iterator>
+#include "trajectory_msgs/JointTrajectory.h"
 tf2_ros::Buffer tfBuffer;
 std_srvs::Trigger begin_comp;
 std_srvs::SetBool my_bool_var;
@@ -30,7 +34,11 @@ osrf_gear::LogicalCameraImage binImage8;
 osrf_gear::LogicalCameraImage binImage9;
 osrf_gear::LogicalCameraImage binImage10;
 geometry_msgs::PoseStamped part_pose, goal_pose;
-sensor_msgs::JointState jointState;
+sensor_msgs::JointState joint_states;
+std::vector<int> validQs;
+double  bestQ[6];
+double q_sols[8][6];
+bool jointStatesCalled = false;
 
 void t_matrix(double* matrix, double x, double y, double z) {
 	
@@ -38,7 +46,6 @@ void t_matrix(double* matrix, double x, double y, double z) {
 	*(matrix + 7) = y;
 	*(matrix + 11) = z;
 	
-
 }
 void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
 		binImage1 == cameraResponse;
@@ -93,8 +100,31 @@ void order_callback(const osrf_gear::Order in_order) {
 }
 
 void joint_callback(sensor_msgs::JointState current_joint) {
-	jointState = current_joint;
+	jointStatesCalled = true;
+	joint_states = current_joint;
 }
+
+void best_q(int numSols) {
+	int q_sol_counter = 0;
+	int which_array = 0;
+	bool isSecondValid = false;
+	for (int i = 0; i < numSols; i++) {
+		for (int j = 0; j < 6; j++) {
+			ROS_INFO_STREAM("Element at   " << i << " array  " << q_sols[i][j]);
+			if (j == 1) {
+				if ((3.14 < q_sols[i][j]) && (q_sols[i][j] < 6.28)) {
+					ROS_INFO_STREAM("Valid shoulder joint   " <<  q_sols[i][j]);
+					validQs.push_back(i);
+				}
+			}
+		}
+	}
+	for (int i : validQs) {
+		ROS_INFO_STREAM("Valid q solutions " << i);
+	}
+}
+
+
 
 int main(int argc, char** argv) {
 	ros::init(argc, argv, "ariac_lab");
@@ -102,12 +132,17 @@ int main(int argc, char** argv) {
 	orders.clear();
 	ros::ServiceClient begin_client = n.serviceClient<std_srvs::Trigger>("ariac/start_competition");
 	int service_call_succeeded;
-	float q[] = { 3.14, -1.13, 1.51, 3.77, -1.51, 0 };
-	float T[4][4];
-	ur_kinematics::forward((double*)&q[0], (double*) & T[0][0]);
-	float q_sols[8][6];
+	double q[] = { 3.14, -1.13, 1.51, 3.77, -1.51, 0 };
+	double T_pose[4][4], T_des[4][4];
+	trajectory_msgs::JointTrajectory desired;
+	double q_pose[6], q_des[8][6];
+	double T[4][4];
+	ur_kinematics::forward(&q[0],  &T[0][0]);
+
 	int num_sol;
-	num_sol = ur_kinematics::inverse( & T[0][0], &q[0][0], 0.0);
+	//num_sol = ur_kinematics::inverse(&T[0][0], &q_sols[0][0], 0.0);
+	
+	
 	service_call_succeeded = begin_client.call(begin_comp);
 	if (!service_call_succeeded) {
 		ROS_ERROR("Competition service call failed! Oh me oh my");
@@ -123,16 +158,16 @@ int main(int argc, char** argv) {
 	materialLocationClient = n.serviceClient<osrf_gear::GetMaterialLocations>("/ariac/material_locations");
 	my_bool_var.request.data = true;
 	tf2_ros::TransformListener tfListener(tfBuffer);
-	ros::Subscriber agv1 = n.subscribe("/ariac/logical_camera_agv1", 15, camera_callback1);
-	ros::Subscriber agv2 = n.subscribe("/ariac/logical_camera_agv2", 15, camera_callback2);
-	ros::Subscriber bin1 = n.subscribe("/ariac/logical_camera_bin1", 15, camera_callback3);
-	ros::Subscriber bin2 = n.subscribe("/ariac/logical_camera_bin2", 15, camera_callback4);
-	ros::Subscriber bin3 = n.subscribe("/ariac/logical_camera_bin3", 15, camera_callback5);
-	ros::Subscriber bin4 = n.subscribe("/ariac/logical_camera_bin4", 15, camera_callback6);
-	ros::Subscriber bin5 = n.subscribe("/ariac/logical_camera_bin5", 15, camera_callback7);
-	ros::Subscriber bin6 = n.subscribe("/ariac/logical_camera_bin6", 15, camera_callback8);
-	ros::Subscriber faulty1 = n.subscribe("/ariac/quality_control_sensor_1", 15, camera_callback9);
-	ros::Subscriber faulty2 = n.subscribe("/ariac/quality_control_sensor_2", 15, camera_callback10);
+	ros::Subscriber agv1 = n.subscribe("/ariac/logical_camera_agv1", 300, camera_callback1);
+	ros::Subscriber agv2 = n.subscribe("/ariac/logical_camera_agv2", 300, camera_callback2);
+	ros::Subscriber bin1 = n.subscribe("/ariac/logical_camera_bin1", 300, camera_callback3);
+	ros::Subscriber bin2 = n.subscribe("/ariac/logical_camera_bin2", 300, camera_callback4);
+	ros::Subscriber bin3 = n.subscribe("/ariac/logical_camera_bin3", 300, camera_callback5);
+	ros::Subscriber bin4 = n.subscribe("/ariac/logical_camera_bin4", 300, camera_callback6);
+	ros::Subscriber bin5 = n.subscribe("/ariac/logical_camera_bin5", 300, camera_callback7);
+	ros::Subscriber bin6 = n.subscribe("/ariac/logical_camera_bin6", 300, camera_callback8);
+	ros::Subscriber faulty1 = n.subscribe("/ariac/quality_control_sensor_1", 300, camera_callback9);
+	ros::Subscriber faulty2 = n.subscribe("/ariac/quality_control_sensor_2", 300, camera_callback10);
 	ros::Subscriber orderSubscriber = n.subscribe<osrf_gear::Order>("/ariac/orders", 1, order_callback);
 	ros::Subscriber jointState = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1, joint_callback);
 	double  stand_in[4][4] = { {0.0, -1.0, 0.0, -100}, \
@@ -143,8 +178,27 @@ int main(int argc, char** argv) {
 	double y = 4;
 	double z = 5;
 	t_matrix((double*)stand_in, x, y, z);
+	/* 
+	ros::MultiThreadedSpinner spinner(4);
+	spinner.spin();
+	*/
+	ros::AsyncSpinner spinner(0);
+	spinner.start();
 	while (ros::ok()) {
-		ros::MultiThreadedSpinner spinner(4);
+		//ros::MultiThreadedSpinner spinner(4);
+		if (jointStatesCalled) {
+			q_pose[0] = joint_states.position[1];
+			q_pose[1] = joint_states.position[2];
+			q_pose[2] = joint_states.position[3];
+			q_pose[3] = joint_states.position[4];
+			q_pose[4] = joint_states.position[5];
+			q_pose[5] = joint_states.position[6];
+			for (auto element : q_pose) {
+				ROS_INFO_STREAM("Q POSE IS " << element);
+			}
+		}
+		ur_kinematics::forward(&q_pose[0], &T[0][0]);
+		
 		if (orders.size() > 0) {
 			ROS_INFO_STREAM("We have orders");
 			for (osrf_gear::Shipment currentShip : orders[0].shipments) {
@@ -165,9 +219,11 @@ int main(int argc, char** argv) {
 						binLocation = unit.unit_id;
 						if (unit.unit_id == "bin1") {
 							ros::Duration(1.0).sleep();
+							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
-							ROS_WARN_STREAM("POSE IS " << binImage3);
+							 */
+							//ROS_WARN_STREAM("POSE IS " << binImage3);
 							if (binImage3.models.size() > 0) {
 								part_pose.pose = binImage3.models[0].pose;
 							}
@@ -175,9 +231,11 @@ int main(int argc, char** argv) {
 						}
 						 if (unit.unit_id == "bin2") {
 							ros::Duration(1.0).sleep();
+							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
-							ROS_WARN_STREAM("POSE IS " << binImage4);
+							*/
+							//ROS_WARN_STREAM("POSE IS " << binImage4);
 							if (binImage4.models.size() > 0) {
 								part_pose.pose = binImage4.models[0].pose;
 							}
@@ -185,9 +243,11 @@ int main(int argc, char** argv) {
 						}
 						if (unit.unit_id == "bin3") {
 							ros::Duration(1.0).sleep();
+							/* 
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage5);
+							*/
 							if (binImage5.models.size() > 0) {
 								part_pose.pose = binImage5.models[0].pose;
 							}
@@ -195,9 +255,11 @@ int main(int argc, char** argv) {
 						}
 						if (unit.unit_id == "bin4") {
 							ros::Duration(1.0).sleep();
+							/* 
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage6);
+							*/
 							if (binImage6.models.size() > 0) {
 								part_pose.pose = binImage6.models[0].pose;
 							}
@@ -205,23 +267,63 @@ int main(int argc, char** argv) {
 						}
 						if (unit.unit_id == "bin5") {
 							ros::Duration(1.0).sleep();
+							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage7);
+							*/
 							if (binImage7.models.size() > 0) {
 								part_pose.pose = binImage7.models[0].pose;
 							}
 						}
 						if (unit.unit_id == "bin6") {
 							ros::Duration(1.0).sleep();
+							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage8);
+							 */
 							if (binImage8.models.size() > 0) {
 								part_pose.pose = binImage8.models[0].pose;
 							}
 							
 						}
+					ros::Duration(5.0).sleep();
+					if (!(part_pose.pose.position.x == 0 && part_pose.pose.position.y == 0 && part_pose.pose.position.z== 0)) {
+						T_des[0][3] = part_pose.pose.position.x;
+						T_des[1][3] = part_pose.pose.position.y;
+						T_des[2][3] = part_pose.pose.position.z + 0.3; // above part
+						T_des[3][3] = 1.0;
+						T_des[0][0] = 0.0; T_des[0][1] = -1.0; T_des[0][2] = 0.0;
+						T_des[1][0] = 0.0; T_des[1][1] = 0.0; T_des[1][2] = 1.0;
+						T_des[2][0] = -1.0; T_des[2][1] = 0.0; T_des[2][2] = 0.0;
+						T_des[3][0] = 0.0; T_des[3][1] = 0.0; T_des[3][2] = 0.0;
+						ROS_INFO_STREAM("PART POSE IS " << part_pose);
+
+
+						ROS_INFO_STREAM("PART POSE  X IS " << T_des[0][3]);
+						ROS_INFO_STREAM("PART POSE  Y IS " << T_des[1][3]);
+						ROS_INFO_STREAM("PART POSE  Z IS " << T_des[2][3]);
+
+
+						num_sol = ur_kinematics::inverse((double*)&T_des, (double*)&q_sols, 0.0);
+					}
+					if (num_sol != 0) {
+						ROS_INFO_STREAM("Number of solutions " << num_sol);
+						ROS_INFO_STREAM("The q sol " << q_sols[1][1]);
+						best_q(num_sol);
+						double best_solution[6];
+						int best_location = validQs[0];
+						ROS_INFO_STREAM("Best location index is " << best_location);
+						for (int i = 0; i < 6; i++) {
+							best_solution[i] = q_sols[best_location][i];
+							ROS_INFO_STREAM("Best solution at position " << i << " is " << q_sols[best_location][i]);
+						}
+					}
+					else {
+						ROS_ERROR("THERE ARE ZERO SOLUTIONS");
+					}
+					
 					}
 				}
 			}
@@ -254,9 +356,8 @@ int main(int argc, char** argv) {
 			tf2::doTransform(part_pose, goal_pose, tfStamped);
 			}
 			
-		ros::Duration(5.0).sleep();
-		spinner.spin();
-		ROS_INFO_STREAM(jointState);
+
+		//ROS_INFO_STREAM(jointState);
 	}
 
 	return  0;
