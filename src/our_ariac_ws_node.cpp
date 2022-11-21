@@ -35,6 +35,8 @@ osrf_gear::LogicalCameraImage binImage9;
 osrf_gear::LogicalCameraImage binImage10;
 geometry_msgs::PoseStamped part_pose, goal_pose;
 sensor_msgs::JointState joint_states;
+trajectory_msgs::JointTrajectory joint_trajectory;
+bool partFlag = false;
 std::vector<int> validQs;
 double  bestQ[6];
 double q_sols[8][6];
@@ -49,48 +51,58 @@ void t_matrix(double* matrix, double x, double y, double z) {
 }
 void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
 		binImage1 == cameraResponse;
+		partFlag = true;
 		//ROS_INFO_STREAM("Camera Response" << binImage1);
 }
 
 void camera_callback2(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage2 = cameraResponse;
+	partFlag = true;
 	//ROS_INFO_STREAM("Camera Response" << binImage2);
 }
 
 void camera_callback3(osrf_gear::LogicalCameraImage cameraResponse) {
 
 		binImage3 = cameraResponse;
+		partFlag = true;
 		//ROS_INFO_STREAM("Camera Response" << binImage3);
 
 }
 
 void camera_callback4(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage4 = cameraResponse;
+	partFlag = true;
 }
 
 void camera_callback5(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage5 = cameraResponse;
+	partFlag = true;
 }
 
 void camera_callback6(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage6 = cameraResponse;
+	partFlag = true;
 	//ROS_INFO_STREAM("Camera Response6" << binImage6);
 }
 
 void camera_callback7(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage7 = cameraResponse;
+	partFlag = true;
 }
 
 void camera_callback8(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage8 = cameraResponse;
+	partFlag = true;
 }
 
 void camera_callback9(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage9 = cameraResponse;
+	partFlag = true;
 }
 
 void camera_callback10(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage10 = cameraResponse;
+	partFlag = true;
 }
 
 void order_callback(const osrf_gear::Order in_order) {
@@ -127,6 +139,7 @@ void best_q(int numSols) {
 
 
 int main(int argc, char** argv) {
+	
 	ros::init(argc, argv, "ariac_lab");
 	ros::NodeHandle n;
 	orders.clear();
@@ -139,11 +152,9 @@ int main(int argc, char** argv) {
 	double T[4][4];
 	ur_kinematics::forward(&q[0],  &T[0][0]);
 
-	int num_sol;
-	//num_sol = ur_kinematics::inverse(&T[0][0], &q_sols[0][0], 0.0);
-	
-	
+	int num_sol = 0;
 	service_call_succeeded = begin_client.call(begin_comp);
+
 	if (!service_call_succeeded) {
 		ROS_ERROR("Competition service call failed! Oh me oh my");
 	}
@@ -158,7 +169,8 @@ int main(int argc, char** argv) {
 	materialLocationClient = n.serviceClient<osrf_gear::GetMaterialLocations>("/ariac/material_locations");
 	my_bool_var.request.data = true;
 	tf2_ros::TransformListener tfListener(tfBuffer);
-	ros::Subscriber agv1 = n.subscribe("/ariac/logical_camera_agv1", 300, camera_callback1);
+	ROS_INFO("IBefore subscriber list");
+	ros::Subscriber agv1 = n.subscribe("/ariac/logical_camera_agv1", 3, camera_callback1);
 	ros::Subscriber agv2 = n.subscribe("/ariac/logical_camera_agv2", 300, camera_callback2);
 	ros::Subscriber bin1 = n.subscribe("/ariac/logical_camera_bin1", 300, camera_callback3);
 	ros::Subscriber bin2 = n.subscribe("/ariac/logical_camera_bin2", 300, camera_callback4);
@@ -178,14 +190,10 @@ int main(int argc, char** argv) {
 	double y = 4;
 	double z = 5;
 	t_matrix((double*)stand_in, x, y, z);
-	/* 
-	ros::MultiThreadedSpinner spinner(4);
-	spinner.spin();
-	*/
-	ros::AsyncSpinner spinner(0);
+
+	ros::AsyncSpinner spinner(1);
 	spinner.start();
 	while (ros::ok()) {
-		//ros::MultiThreadedSpinner spinner(4);
 		if (jointStatesCalled) {
 			q_pose[0] = joint_states.position[1];
 			q_pose[1] = joint_states.position[2];
@@ -197,7 +205,7 @@ int main(int argc, char** argv) {
 				ROS_INFO_STREAM("Q POSE IS " << element);
 			}
 		}
-		ur_kinematics::forward(&q_pose[0], &T[0][0]);
+		//ur_kinematics::forward(&q_pose[0], &T[0][0]);
 		
 		if (orders.size() > 0) {
 			ROS_INFO_STREAM("We have orders");
@@ -289,7 +297,8 @@ int main(int argc, char** argv) {
 							
 						}
 					ros::Duration(5.0).sleep();
-					if (!(part_pose.pose.position.x == 0 && part_pose.pose.position.y == 0 && part_pose.pose.position.z== 0)) {
+					if (!(part_pose.pose.position.x == 0 && part_pose.pose.position.y == 0 && part_pose.pose.position.z == 0) ){
+						ROS_ERROR("WE HAVE ENTERED THE PART FLAG CHECK");
 						T_des[0][3] = part_pose.pose.position.x;
 						T_des[1][3] = part_pose.pose.position.y;
 						T_des[2][3] = part_pose.pose.position.z + 0.3; // above part
@@ -319,6 +328,23 @@ int main(int argc, char** argv) {
 							best_solution[i] = q_sols[best_location][i];
 							ROS_INFO_STREAM("Best solution at position " << i << " is " << q_sols[best_location][i]);
 						}
+						goal_pose = part_pose;
+						goal_pose.pose.position.z += 0.10; // 10 cm above the part
+			// Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
+						goal_pose.pose.orientation.w = 0.707;
+						goal_pose.pose.orientation.x = 0.0;
+						goal_pose.pose.orientation.y = 0.707;
+						goal_pose.pose.orientation.z = 0.0;
+						geometry_msgs::TransformStamped tfStamped;
+						//tf2::doTransform(part_pose, goal_pose, tfStamped);
+						//tf2_ros::Buffer.lookupTransform("to_frame", "from_frame", "how_recent", "how_long_to_wait_for_transform");
+						try {
+							tfStamped = tfBuffer.lookupTransform("arm1_base_frame", "logical_camera_frame", ros::Time(0.0), ros::Duration(1.0));
+							ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(), tfStamped.child_frame_id.c_str());
+						}
+						catch (tf2::TransformException& ex) {
+							ROS_ERROR("%s", ex.what());
+						}
 					}
 					else {
 						ROS_ERROR("THERE ARE ZERO SOLUTIONS");
@@ -330,30 +356,13 @@ int main(int argc, char** argv) {
 			
 
 			//To put the whole image message into a map, have ot make it not a constant pointer, copy to dynamic pointer
-			geometry_msgs::TransformStamped tfStamped;
-			try {
-				tfStamped = tfBuffer.lookupTransform("arm1_base_frame", "logical_camera_frame", ros::Time(0.0), ros::Duration(1.0));
-				ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(), tfStamped.child_frame_id.c_str());
-			}
-			catch (tf2::TransformException& ex) {
-				ROS_ERROR("%s", ex.what());
-			}
+		
+		
 
-			// tf2_ross::Buffer.lookupTransform("to_frame", "from_frame", "how_recent",
-			//"how_long_to_wait_for_transform");
 
 			// Create variables
 
 			// Copy pose from the logical camera.
-			goal_pose = part_pose;
-			goal_pose.pose.position.z += 0.10; // 10 cm above the part
-// Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-			goal_pose.pose.orientation.w = 0.707;
-			goal_pose.pose.orientation.x = 0.0;
-			goal_pose.pose.orientation.y = 0.707;
-			goal_pose.pose.orientation.z = 0.0;
-
-			tf2::doTransform(part_pose, goal_pose, tfStamped);
 			}
 			
 
