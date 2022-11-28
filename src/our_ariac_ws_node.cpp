@@ -2,6 +2,7 @@
 #include "std_srvs/SetBool.h"
 #include <vector>
 #include "ros/ros.h"
+#include <string>
 //#include <ecse_373_ariac/osrf_gear/Order.h>
 #include <osrf_gear/Order.h>
 #include <osrf_gear/GetMaterialLocations.h>
@@ -15,6 +16,9 @@
 #include <iostream>
 #include <experimental/iterator>
 #include "trajectory_msgs/JointTrajectory.h"
+#include "actionlib/client/simple_action_client.h"
+#include "actionlib/client/terminal_state.h"
+#include "control_msgs/FollowJointTrajectoryAction.h"
 tf2_ros::Buffer tfBuffer;
 std_srvs::Trigger begin_comp;
 std_srvs::SetBool my_bool_var;
@@ -36,11 +40,13 @@ osrf_gear::LogicalCameraImage binImage10;
 geometry_msgs::PoseStamped part_pose, goal_pose;
 sensor_msgs::JointState joint_states;
 trajectory_msgs::JointTrajectory joint_trajectory;
+std::string cameraName = "None";
 bool partFlag = false;
 std::vector<int> validQs;
 double  bestQ[6];
 double q_sols[8][6];
 bool jointStatesCalled = false;
+int count = 0;
 
 void t_matrix(double* matrix, double x, double y, double z) {
 	
@@ -52,12 +58,14 @@ void t_matrix(double* matrix, double x, double y, double z) {
 void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
 		binImage1 == cameraResponse;
 		partFlag = true;
+		cameraName = "logical_camera_agv1_frame";
 		//ROS_INFO_STREAM("Camera Response" << binImage1);
 }
 
 void camera_callback2(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage2 = cameraResponse;
 	partFlag = true;
+	cameraName = "logical_camera_agv2_frame";
 	//ROS_INFO_STREAM("Camera Response" << binImage2);
 }
 
@@ -65,43 +73,51 @@ void camera_callback3(osrf_gear::LogicalCameraImage cameraResponse) {
 
 		binImage3 = cameraResponse;
 		partFlag = true;
+		cameraName = "logical_camera_bin1_frame";
 		//ROS_INFO_STREAM("Camera Response" << binImage3);
 
 }
 
 void camera_callback4(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage4 = cameraResponse;
+	cameraName = "logical_camera_bin2_frame";
 	partFlag = true;
 }
 
 void camera_callback5(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage5 = cameraResponse;
+	cameraName = "logical_camera_bin3_frame";
 	partFlag = true;
 }
 
 void camera_callback6(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage6 = cameraResponse;
+	cameraName = "logical_camera_bin4_frame";
 	partFlag = true;
 	//ROS_INFO_STREAM("Camera Response6" << binImage6);
 }
 
 void camera_callback7(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage7 = cameraResponse;
+	cameraName = "logical_camera_bin5_frame";
 	partFlag = true;
 }
 
 void camera_callback8(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage8 = cameraResponse;
+	cameraName = "logical_camera_bin6_frame";
 	partFlag = true;
 }
 
 void camera_callback9(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage9 = cameraResponse;
+	cameraName = "quality_control_sensor_1_frame";
 	partFlag = true;
 }
 
 void camera_callback10(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage10 = cameraResponse;
+	cameraName = "quality_control_sensor_2_frame";
 	partFlag = true;
 }
 
@@ -169,7 +185,7 @@ int main(int argc, char** argv) {
 	materialLocationClient = n.serviceClient<osrf_gear::GetMaterialLocations>("/ariac/material_locations");
 	my_bool_var.request.data = true;
 	tf2_ros::TransformListener tfListener(tfBuffer);
-	ROS_INFO("IBefore subscriber list");
+	actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> trajectory_as("ariac/arm1/arm/follow_joint_trajectory", true);
 	ros::Subscriber agv1 = n.subscribe("/ariac/logical_camera_agv1", 3, camera_callback1);
 	ros::Subscriber agv2 = n.subscribe("/ariac/logical_camera_agv2", 300, camera_callback2);
 	ros::Subscriber bin1 = n.subscribe("/ariac/logical_camera_bin1", 300, camera_callback3);
@@ -182,6 +198,8 @@ int main(int argc, char** argv) {
 	ros::Subscriber faulty2 = n.subscribe("/ariac/quality_control_sensor_2", 300, camera_callback10);
 	ros::Subscriber orderSubscriber = n.subscribe<osrf_gear::Order>("/ariac/orders", 1, order_callback);
 	ros::Subscriber jointState = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1, joint_callback);
+	control_msgs::FollowJointTrajectoryAction joint_trajectory_as;
+
 	double  stand_in[4][4] = { {0.0, -1.0, 0.0, -100}, \
 {0.0, 0.0, 1.0, -100}, \
 {-1.0, 0.0, 0.0 , -100}, \
@@ -326,7 +344,7 @@ int main(int argc, char** argv) {
 						ROS_INFO_STREAM("Best location index is " << best_location);
 						for (int i = 0; i < 6; i++) {
 							best_solution[i] = q_sols[best_location][i];
-							ROS_INFO_STREAM("Best solution at position " << i << " is " << q_sols[best_location][i]);
+							ROS_INFO_STREAM("Best solution at position " << i << " is " << best_solution[i]);
 						}
 						goal_pose = part_pose;
 						goal_pose.pose.position.z += 0.10; // 10 cm above the part
@@ -336,15 +354,50 @@ int main(int argc, char** argv) {
 						goal_pose.pose.orientation.y = 0.707;
 						goal_pose.pose.orientation.z = 0.0;
 						geometry_msgs::TransformStamped tfStamped;
-						//tf2::doTransform(part_pose, goal_pose, tfStamped);
+						tf2::doTransform(part_pose, goal_pose, tfStamped);
 						//tf2_ros::Buffer.lookupTransform("to_frame", "from_frame", "how_recent", "how_long_to_wait_for_transform");
 						try {
-							tfStamped = tfBuffer.lookupTransform("arm1_base_frame", "logical_camera_frame", ros::Time(0.0), ros::Duration(1.0));
+							tfStamped = tfBuffer.lookupTransform("arm1_base_link", cameraName, ros::Time::now(), ros::Duration(1.0));
 							ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(), tfStamped.child_frame_id.c_str());
 						}
 						catch (tf2::TransformException& ex) {
 							ROS_ERROR("%s", ex.what());
 						}
+						joint_trajectory.header.seq = count++;
+						joint_trajectory.header.stamp = ros::Time::now() + ros::Duration(1);
+						joint_trajectory.header.frame_id = "/world";
+						joint_trajectory_as.action_goal.header = joint_trajectory.header;
+						joint_trajectory.joint_names.clear();
+						joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
+						joint_trajectory.joint_names.push_back("shoulder_pan_joint");
+						joint_trajectory.joint_names.push_back("shoulder_lift_joint");
+						joint_trajectory.joint_names.push_back("elbow_joint");
+						joint_trajectory.joint_names.push_back("wrist_1_joint");
+						joint_trajectory.joint_names.push_back("wrist_2_joint");
+						joint_trajectory.joint_names.push_back("wrist_3_joint"); 
+						joint_trajectory.points.resize(2);
+						joint_trajectory.points[0].positions.resize(joint_trajectory.joint_names.size());
+						for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++) {
+							for (int indz = 0; indz < joint_states.name.size(); indz++) {
+								if (joint_trajectory.joint_names[indy] == joint_states.name[indz]) {
+									joint_trajectory.points[0].positions[indy] = joint_states.position[indz];
+									break;
+								}
+							}
+						}
+						// When to start (immediately upon receipt).
+						joint_trajectory.points[0].time_from_start = ros::Duration(0.0);
+						joint_trajectory.points[1].positions.resize(joint_trajectory.joint_names.size());
+						joint_trajectory.points[1].positions[0] = joint_states.position[1];
+						for (int indy = 0; indy < 6; indy++) {
+							joint_trajectory.points[1].positions[indy + 1] = best_solution[indy];
+						}
+						joint_trajectory.points[1].time_from_start = ros::Duration(1.0);
+						joint_trajectory_as.action_goal.goal.trajectory = joint_trajectory;
+						actionlib::SimpleClientGoalState state = trajectory_as.sendGoalAndWait(joint_trajectory_as.action_goal.goal, ros::Duration(30.0), ros::Duration(30.0));
+						ROS_INFO("Action Server returned with status: [%i] %s", state.state_, state.toString().c_str());
+
+
 					}
 					else {
 						ROS_ERROR("THERE ARE ZERO SOLUTIONS");
