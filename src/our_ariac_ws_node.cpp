@@ -47,6 +47,7 @@ double  bestQ[6];
 double q_sols[8][6];
 bool jointStatesCalled = false;
 int count = 0;
+int numberOfValidQs = 0;
 
 void t_matrix(double* matrix, double x, double y, double z) {
 	
@@ -149,6 +150,8 @@ void best_q(int numSols) {
 	}
 	for (int i : validQs) {
 		ROS_INFO_STREAM("Valid q solutions " << i);
+		numberOfValidQs += 1;
+
 	}
 }
 
@@ -340,7 +343,7 @@ int main(int argc, char** argv) {
 						ROS_INFO_STREAM("The q sol " << q_sols[1][1]);
 						best_q(num_sol);
 						double best_solution[6];
-						int best_location = validQs[0];
+						int best_location = validQs[2];
 						ROS_INFO_STREAM("Best location index is " << best_location);
 						for (int i = 0; i < 6; i++) {
 							best_solution[i] = q_sols[best_location][i];
@@ -368,10 +371,10 @@ int main(int argc, char** argv) {
 						joint_trajectory.header.frame_id = "/world";
 						joint_trajectory_as.action_goal.header = joint_trajectory.header;
 						joint_trajectory.joint_names.clear();
-						joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
-						joint_trajectory.joint_names.push_back("shoulder_pan_joint");
-						joint_trajectory.joint_names.push_back("shoulder_lift_joint");
 						joint_trajectory.joint_names.push_back("elbow_joint");
+						joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
+						joint_trajectory.joint_names.push_back("shoulder_lift_joint");
+						joint_trajectory.joint_names.push_back("shoulder_pan_joint");
 						joint_trajectory.joint_names.push_back("wrist_1_joint");
 						joint_trajectory.joint_names.push_back("wrist_2_joint");
 						joint_trajectory.joint_names.push_back("wrist_3_joint"); 
@@ -394,11 +397,40 @@ int main(int argc, char** argv) {
 						}
 						joint_trajectory.points[1].time_from_start = ros::Duration(1.0);
 						joint_trajectory_as.action_goal.goal.trajectory = joint_trajectory;
-						actionlib::SimpleClientGoalState state = trajectory_as.sendGoalAndWait(joint_trajectory_as.action_goal.goal, ros::Duration(30.0), ros::Duration(30.0));
+						actionlib::SimpleClientGoalState state = trajectory_as.sendGoalAndWait(joint_trajectory_as.action_goal.goal, ros::Duration(60 ,0), ros::Duration(60, 0));
+						if (trajectory_as.waitForResult(ros::Duration(60, 0))) {
+							ROS_ERROR("Got a result");
+						}
 						ROS_INFO("Action Server returned with status: [%i] %s", state.state_, state.toString().c_str());
-
-
+						int current_q = 0;
+						/*
+						while ((state.toString().c_str() != "SUCCEEDED"  ) && (current_q < numberOfValidQs - 1)) {
+							ROS_INFO("Action Server returned with status: [%i] %s", state.state_, state.toString().c_str());
+							ROS_ERROR("Trying other solution");
+							current_q += 1;
+							best_location = validQs[current_q];
+							for (int i = 0; i < 6; i++) {
+								best_solution[i] = q_sols[best_location][i];
+								ROS_INFO_STREAM("Best solution at position " << i << " is " << best_solution[i]);
+							}
+							joint_trajectory.points[0].time_from_start = ros::Duration(0.0);
+							joint_trajectory.points[1].positions.resize(joint_trajectory.joint_names.size());
+							joint_trajectory.points[1].positions[0] = joint_states.position[1];
+							joint_trajectory.header.stamp = ros::Time::now() + ros::Duration(1);
+							for (int indy = 0; indy < 6; indy++) {
+								joint_trajectory.points[1].positions[indy + 1] = best_solution[indy];
+							}
+							joint_trajectory.points[1].time_from_start = ros::Duration(1.0);
+							joint_trajectory_as.action_goal.goal.trajectory = joint_trajectory;
+							actionlib::SimpleClientGoalState state = trajectory_as.sendGoalAndWait(joint_trajectory_as.action_goal.goal, ros::Duration(30.0), ros::Duration(30.0));
+							ros::Duration(5.0).sleep();
+						}
+						if ((state.toString().c_str() != "SUCCEEDED") && (current_q >= validQs.size())) {
+							ROS_ERROR("UNABLE TO FIND SOLUTION WITHOUT ABORTING");
+						}
+						*/
 					}
+					 
 					else {
 						ROS_ERROR("THERE ARE ZERO SOLUTIONS");
 					}
