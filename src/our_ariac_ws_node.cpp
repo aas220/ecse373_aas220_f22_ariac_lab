@@ -60,6 +60,7 @@ void t_matrix(double* matrix, double x, double y, double z) {
 }
 void bin_cams_callback(osrf_gear::LogicalCameraImage cameraResponse, int bin) {
 	bin_cams[bin] = cameraResponse;
+	ROS_INFO_STREAM("BIN CAMS CALLBACK");
 }
 
 void bin_cam_1_callback (osrf_gear::LogicalCameraImage cameraResponse) {
@@ -67,7 +68,6 @@ void bin_cam_1_callback (osrf_gear::LogicalCameraImage cameraResponse) {
 }
 
 void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
-	agvCams1 = cameraResponse;
 	partFlag = true;
 	cameraName = "logical_camera_agv1_frame";
 	bin_cams_callback(cameraResponse, 0);
@@ -75,7 +75,6 @@ void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
 }
 
 void camera_callback2(osrf_gear::LogicalCameraImage cameraResponse) {
-	agvCams2 = cameraResponse;
 	partFlag = true;
 	cameraName = "logical_camera_agv2_frame";
 	bin_cams_callback(cameraResponse, 1);
@@ -84,7 +83,6 @@ void camera_callback2(osrf_gear::LogicalCameraImage cameraResponse) {
 
 void camera_callback3(osrf_gear::LogicalCameraImage cameraResponse) {
 	bin_cams_callback(cameraResponse, 2);
-		binImage1 = cameraResponse;
 		partFlag = true;
 		cameraName = "logical_camera_bin1_frame";
 		//ROS_INFO_STREAM("Camera Response" << binImage3);
@@ -92,29 +90,22 @@ void camera_callback3(osrf_gear::LogicalCameraImage cameraResponse) {
 }
 
 void camera_callback4(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage2 = cameraResponse;
 	bin_cams_callback(cameraResponse, 3);
 	cameraName = "logical_camera_bin2_frame";
-	partFlag = true;
 }
 
 void camera_callback5(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage3 = cameraResponse;
 	bin_cams_callback(cameraResponse, 4);
 	cameraName = "logical_camera_bin3_frame";
-	partFlag = true;
 }
 
 void camera_callback6(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage4 = cameraResponse;
 	bin_cams_callback(cameraResponse, 5);
 	cameraName = "logical_camera_bin4_frame";
-	partFlag = true;
 	//ROS_INFO_STREAM("Camera Response6" << binImage6);
 }
 
 void camera_callback7(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage5  = cameraResponse;
 	bin_cams_callback(cameraResponse, 6);
 	cameraName = "logical_camera_bin5_frame";
 	partFlag = true;
@@ -193,7 +184,7 @@ int main(int argc, char** argv) {
 	int num_sol = 0;
 	service_call_succeeded = begin_client.call(begin_comp);
 
-	bin_cams.resize(6);
+	bin_cams.resize(9);
 	agv_cams.resize(2);
 
 	if (!service_call_succeeded) {
@@ -237,6 +228,7 @@ int main(int argc, char** argv) {
 
 	ros::AsyncSpinner spinner(1);
 	spinner.start();
+	ros::Duration(5.0).sleep();
 	while (ros::ok()) {
 		if (jointStatesCalled) {
 			q_pose[0] = joint_states.position[1];
@@ -273,16 +265,15 @@ int main(int argc, char** argv) {
 						int bin_indx;
 
 						if (unit.unit_id == "bin1") {
-							ROS_INFO_STREAM("INside of bin one check");
+							ROS_INFO_STREAM("Inside of bin one check");
 							ros::Duration(1.0).sleep();
 							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							 */
 							//ROS_WARN_STREAM("POSE IS " << binImage3);
-							if (binImage1.models.size() > 0) {
-								part_pose.pose = binImage1.models[0].pose;
-							}
+								bin_indx = 2;
+							
 							cam_indx = 0;
 						}
 						 if (unit.unit_id == "bin2") {
@@ -292,45 +283,38 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							*/
 							//ROS_WARN_STREAM("POSE IS " << binImage4);
-							if (binImage2.models.size() > 0) {
-								part_pose.pose = binImage2.models[0].pose;
-							}
+								bin_indx = 3;
+							
 							
 						}
 						if (unit.unit_id == "bin3") {
-							ros::Duration(1.0).sleep();
 							/* 
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage5);
 							*/
-							if (binImage3.models.size() > 0) {
-								part_pose.pose = binImage3.models[0].pose;
-							}
+								bin_indx = 4;
+							
 							
 						}
 						if (unit.unit_id == "bin4") {
-							ros::Duration(1.0).sleep();
 							/* 
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage6);
 							*/
-							if (binImage4.models.size() > 0) {
-								part_pose.pose = binImage4.models[0].pose;
-							}
+								bin_indx = 5;
+							
 							
 						}
 						if (unit.unit_id == "bin5") {
-							ros::Duration(1.0).sleep();
 							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage7);
 							*/
-							if (binImage5.models.size() > 0) {
-								part_pose.pose = binImage5.models[0].pose;
-							}
+								bin_indx = 6;
+							
 						}
 						if (unit.unit_id == "bin6") {
 							ros::Duration(1.0).sleep();
@@ -339,9 +323,7 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage8);
 							 */
-							if (binImage6.models.size() > 0) {
-								part_pose.pose = binImage6.models[0].pose;
-							}
+								bin_indx = 7;
 							
 						}
 						//part_pose.pose = bin_cams[bin_indx].models[0].pose;
@@ -357,10 +339,13 @@ int main(int argc, char** argv) {
 						// Getn the IK.
 
 						// Populate the Trajectory.
-
-
-						ROS_INFO_STREAM("Part pose is" << part_pose.pose);
-					ros::Duration(5.0).sleep();
+						
+						ROS_INFO_STREAM("test this line" << bin_cams[0]);
+						ros::Duration(5.0).sleep();
+						if (bin_cams[bin_indx].models.size() > 0) {
+							part_pose.pose = bin_cams[bin_indx].models[0].pose;
+							ROS_INFO_STREAM("Part pose is" << part_pose.pose);
+						}
 					if (!(part_pose.pose.position.x == 0 && part_pose.pose.position.y == 0 && part_pose.pose.position.z == 0) ){
 						geometry_msgs::TransformStamped tfStamped;
 						//tf2_ros::Buffer.lookupTransform("to_frame", "from_frame", "how_recent", "how_long_to_wait_for_transform");
@@ -379,7 +364,6 @@ int main(int argc, char** argv) {
 						goal_pose.pose.orientation.y = 0.707;
 						goal_pose.pose.orientation.z = 0.0;
 						ROS_INFO_STREAM("Goal pose is" << goal_pose.pose);
-						ROS_ERROR("WE HAVE ENTERED THE PART FLAG CHECK");
 						T_des[0][3] = goal_pose.pose.position.x;
 						T_des[1][3] = goal_pose.pose.position.y;
 						T_des[2][3] = goal_pose.pose.position.z + 0.3; // above part
