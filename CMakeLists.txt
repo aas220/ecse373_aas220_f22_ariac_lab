@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   ecse_373_ariac
   roscpp
   rviz
+  ur_kinematics
 )
 
 ## System dependencies are found with CMake's conventions
@@ -102,11 +103,12 @@ find_package(catkin REQUIRED COMPONENTS
 ## LIBRARIES: libraries you create in this project that dependent projects also need
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
+
 catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES ariac_lab
-  CATKIN_DEPENDS ecse_373_ariac roscpp rviz
-  DEPENDS system_lib
+ # INCLUDE_DIRS include
+ # LIBRARIES ariac_lab
+  #CATKIN_DEPENDS ecse_373_ariac roscpp rviz
+  #DEPENDS system_lib
 )
 
 ###########

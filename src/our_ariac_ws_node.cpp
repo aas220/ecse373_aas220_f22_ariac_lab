@@ -27,14 +27,16 @@ std::vector<osrf_gear::Order> orders;
 ros::ServiceClient materialLocationClient;
 std::string binLocation;
 osrf_gear::LogicalCameraImage requestedBin;
+std::vector<osrf_gear::LogicalCameraImage> bin_cams;
+std::vector<osrf_gear::LogicalCameraImage> agv_cams;
+osrf_gear::LogicalCameraImage agvCams1;
+osrf_gear::LogicalCameraImage agvCams2;
 osrf_gear::LogicalCameraImage binImage1;
 osrf_gear::LogicalCameraImage binImage2;
 osrf_gear::LogicalCameraImage binImage3;
 osrf_gear::LogicalCameraImage binImage4;
 osrf_gear::LogicalCameraImage binImage5;
 osrf_gear::LogicalCameraImage binImage6;
-osrf_gear::LogicalCameraImage binImage7;
-osrf_gear::LogicalCameraImage binImage8;
 osrf_gear::LogicalCameraImage binImage9;
 osrf_gear::LogicalCameraImage binImage10;
 geometry_msgs::PoseStamped part_pose, goal_pose;
@@ -56,23 +58,33 @@ void t_matrix(double* matrix, double x, double y, double z) {
 	*(matrix + 11) = z;
 	
 }
+void bin_cams_callback(osrf_gear::LogicalCameraImage cameraResponse, int bin) {
+	bin_cams[bin] = cameraResponse;
+}
+
+void bin_cam_1_callback (osrf_gear::LogicalCameraImage cameraResponse) {
+	bin_cams_callback(cameraResponse, 1);
+}
+
 void camera_callback1(osrf_gear::LogicalCameraImage cameraResponse) {
-		binImage1 == cameraResponse;
-		partFlag = true;
-		cameraName = "logical_camera_agv1_frame";
-		//ROS_INFO_STREAM("Camera Response" << binImage1);
+	agvCams1 = cameraResponse;
+	partFlag = true;
+	cameraName = "logical_camera_agv1_frame";
+	bin_cams_callback(cameraResponse, 0);
+	//ROS_INFO_STREAM("Camera Response" << binImage1);
 }
 
 void camera_callback2(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage2 = cameraResponse;
+	agvCams2 = cameraResponse;
 	partFlag = true;
 	cameraName = "logical_camera_agv2_frame";
+	bin_cams_callback(cameraResponse, 1);
 	//ROS_INFO_STREAM("Camera Response" << binImage2);
 }
 
 void camera_callback3(osrf_gear::LogicalCameraImage cameraResponse) {
-
-		binImage3 = cameraResponse;
+	bin_cams_callback(cameraResponse, 2);
+		binImage1 = cameraResponse;
 		partFlag = true;
 		cameraName = "logical_camera_bin1_frame";
 		//ROS_INFO_STREAM("Camera Response" << binImage3);
@@ -80,44 +92,51 @@ void camera_callback3(osrf_gear::LogicalCameraImage cameraResponse) {
 }
 
 void camera_callback4(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage4 = cameraResponse;
+	binImage2 = cameraResponse;
+	bin_cams_callback(cameraResponse, 3);
 	cameraName = "logical_camera_bin2_frame";
 	partFlag = true;
 }
 
 void camera_callback5(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage5 = cameraResponse;
+	binImage3 = cameraResponse;
+	bin_cams_callback(cameraResponse, 4);
 	cameraName = "logical_camera_bin3_frame";
 	partFlag = true;
 }
 
 void camera_callback6(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage6 = cameraResponse;
+	binImage4 = cameraResponse;
+	bin_cams_callback(cameraResponse, 5);
 	cameraName = "logical_camera_bin4_frame";
 	partFlag = true;
 	//ROS_INFO_STREAM("Camera Response6" << binImage6);
 }
 
 void camera_callback7(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage7 = cameraResponse;
+	binImage5  = cameraResponse;
+	bin_cams_callback(cameraResponse, 6);
 	cameraName = "logical_camera_bin5_frame";
 	partFlag = true;
 }
 
 void camera_callback8(osrf_gear::LogicalCameraImage cameraResponse) {
-	binImage8 = cameraResponse;
+	binImage6 = cameraResponse;
+	bin_cams_callback(cameraResponse, 7);
 	cameraName = "logical_camera_bin6_frame";
 	partFlag = true;
 }
 
 void camera_callback9(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage9 = cameraResponse;
+	bin_cams_callback(cameraResponse, 8);
 	cameraName = "quality_control_sensor_1_frame";
 	partFlag = true;
 }
 
 void camera_callback10(osrf_gear::LogicalCameraImage cameraResponse) {
 	binImage10 = cameraResponse;
+	bin_cams_callback(cameraResponse, 9);
 	cameraName = "quality_control_sensor_2_frame";
 	partFlag = true;
 }
@@ -174,6 +193,9 @@ int main(int argc, char** argv) {
 	int num_sol = 0;
 	service_call_succeeded = begin_client.call(begin_comp);
 
+	bin_cams.resize(6);
+	agv_cams.resize(2);
+
 	if (!service_call_succeeded) {
 		ROS_ERROR("Competition service call failed! Oh me oh my");
 	}
@@ -191,6 +213,7 @@ int main(int argc, char** argv) {
 	actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> trajectory_as("ariac/arm1/arm/follow_joint_trajectory", true);
 	ros::Subscriber agv1 = n.subscribe("/ariac/logical_camera_agv1", 3, camera_callback1);
 	ros::Subscriber agv2 = n.subscribe("/ariac/logical_camera_agv2", 300, camera_callback2);
+	ros::Subscriber bin1a = n.subscribe("/ariac/logical_camera_bin1", 3, bin_cam_1_callback);
 	ros::Subscriber bin1 = n.subscribe("/ariac/logical_camera_bin1", 300, camera_callback3);
 	ros::Subscriber bin2 = n.subscribe("/ariac/logical_camera_bin2", 300, camera_callback4);
 	ros::Subscriber bin3 = n.subscribe("/ariac/logical_camera_bin3", 300, camera_callback5);
@@ -246,17 +269,21 @@ int main(int argc, char** argv) {
 						ROS_INFO("made it inside for loop");
 						ROS_INFO_STREAM("this storage unit is " << unit);
 						binLocation = unit.unit_id;
+						int cam_indx;
+						int bin_indx;
+
 						if (unit.unit_id == "bin1") {
+							ROS_INFO_STREAM("INside of bin one check");
 							ros::Duration(1.0).sleep();
 							/*
 							ROS_INFO_STREAM("Part type is" << materialLocation.request.material_type.c_str());
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							 */
 							//ROS_WARN_STREAM("POSE IS " << binImage3);
-							if (binImage3.models.size() > 0) {
-								part_pose.pose = binImage3.models[0].pose;
+							if (binImage1.models.size() > 0) {
+								part_pose.pose = binImage1.models[0].pose;
 							}
-							
+							cam_indx = 0;
 						}
 						 if (unit.unit_id == "bin2") {
 							ros::Duration(1.0).sleep();
@@ -265,8 +292,8 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							*/
 							//ROS_WARN_STREAM("POSE IS " << binImage4);
-							if (binImage4.models.size() > 0) {
-								part_pose.pose = binImage4.models[0].pose;
+							if (binImage2.models.size() > 0) {
+								part_pose.pose = binImage2.models[0].pose;
 							}
 							
 						}
@@ -277,8 +304,8 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage5);
 							*/
-							if (binImage5.models.size() > 0) {
-								part_pose.pose = binImage5.models[0].pose;
+							if (binImage3.models.size() > 0) {
+								part_pose.pose = binImage3.models[0].pose;
 							}
 							
 						}
@@ -289,8 +316,8 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage6);
 							*/
-							if (binImage6.models.size() > 0) {
-								part_pose.pose = binImage6.models[0].pose;
+							if (binImage4.models.size() > 0) {
+								part_pose.pose = binImage4.models[0].pose;
 							}
 							
 						}
@@ -301,8 +328,8 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage7);
 							*/
-							if (binImage7.models.size() > 0) {
-								part_pose.pose = binImage7.models[0].pose;
+							if (binImage5.models.size() > 0) {
+								part_pose.pose = binImage5.models[0].pose;
 							}
 						}
 						if (unit.unit_id == "bin6") {
@@ -312,28 +339,61 @@ int main(int argc, char** argv) {
 							ROS_INFO_STREAM("BIN IS" << unit.unit_id);
 							ROS_WARN_STREAM("POSE IS " << binImage8);
 							 */
-							if (binImage8.models.size() > 0) {
-								part_pose.pose = binImage8.models[0].pose;
+							if (binImage6.models.size() > 0) {
+								part_pose.pose = binImage6.models[0].pose;
 							}
 							
 						}
+						//part_pose.pose = bin_cams[bin_indx].models[0].pose;
+
+
+						// Get the transform.
+
+
+						// Transform the part_pose to goal_pose.
+
+						// Add +Z to goal_pose.
+
+						// Getn the IK.
+
+						// Populate the Trajectory.
+
+
+						ROS_INFO_STREAM("Part pose is" << part_pose.pose);
 					ros::Duration(5.0).sleep();
 					if (!(part_pose.pose.position.x == 0 && part_pose.pose.position.y == 0 && part_pose.pose.position.z == 0) ){
+						geometry_msgs::TransformStamped tfStamped;
+						//tf2_ros::Buffer.lookupTransform("to_frame", "from_frame", "how_recent", "how_long_to_wait_for_transform");
+						try {
+							tfStamped = tfBuffer.lookupTransform("arm1_base_link", cameraName, ros::Time::now(), ros::Duration(1.0));
+							ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(), tfStamped.child_frame_id.c_str());
+						}
+						catch (tf2::TransformException& ex) {
+							ROS_ERROR("%s", ex.what());
+						}
+						tf2::doTransform(part_pose, goal_pose, tfStamped);
+						goal_pose.pose.position.z += 0.10; // 10 cm above the part
+			// Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
+						goal_pose.pose.orientation.w = 0.707;
+						goal_pose.pose.orientation.x = 0.0;
+						goal_pose.pose.orientation.y = 0.707;
+						goal_pose.pose.orientation.z = 0.0;
+						ROS_INFO_STREAM("Goal pose is" << goal_pose.pose);
 						ROS_ERROR("WE HAVE ENTERED THE PART FLAG CHECK");
-						T_des[0][3] = part_pose.pose.position.x;
-						T_des[1][3] = part_pose.pose.position.y;
-						T_des[2][3] = part_pose.pose.position.z + 0.3; // above part
+						T_des[0][3] = goal_pose.pose.position.x;
+						T_des[1][3] = goal_pose.pose.position.y;
+						T_des[2][3] = goal_pose.pose.position.z + 0.3; // above part
 						T_des[3][3] = 1.0;
 						T_des[0][0] = 0.0; T_des[0][1] = -1.0; T_des[0][2] = 0.0;
 						T_des[1][0] = 0.0; T_des[1][1] = 0.0; T_des[1][2] = 1.0;
 						T_des[2][0] = -1.0; T_des[2][1] = 0.0; T_des[2][2] = 0.0;
 						T_des[3][0] = 0.0; T_des[3][1] = 0.0; T_des[3][2] = 0.0;
-						ROS_INFO_STREAM("PART POSE IS " << part_pose);
+						ROS_INFO_STREAM("GOAL POSE " << goal_pose);
 
 
-						ROS_INFO_STREAM("PART POSE  X IS " << T_des[0][3]);
-						ROS_INFO_STREAM("PART POSE  Y IS " << T_des[1][3]);
-						ROS_INFO_STREAM("PART POSE  Z IS " << T_des[2][3]);
+						ROS_INFO_STREAM("GOAL POSE  X IS " << T_des[0][3]);
+						ROS_INFO_STREAM("GOAL POSE  Y IS " << T_des[1][3]);
+						ROS_INFO_STREAM("GOAL POSE  Z IS " << T_des[2][3]);
 
 
 						num_sol = ur_kinematics::inverse((double*)&T_des, (double*)&q_sols, 0.0);
@@ -343,34 +403,27 @@ int main(int argc, char** argv) {
 						ROS_INFO_STREAM("The q sol " << q_sols[1][1]);
 						best_q(num_sol);
 						double best_solution[6];
-						int best_location = validQs[2];
+						int best_location = validQs[0];
 						ROS_INFO_STREAM("Best location index is " << best_location);
 						for (int i = 0; i < 6; i++) {
 							best_solution[i] = q_sols[best_location][i];
 							ROS_INFO_STREAM("Best solution at position " << i << " is " << best_solution[i]);
 						}
-						goal_pose = part_pose;
-						goal_pose.pose.position.z += 0.10; // 10 cm above the part
-			// Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-						goal_pose.pose.orientation.w = 0.707;
-						goal_pose.pose.orientation.x = 0.0;
-						goal_pose.pose.orientation.y = 0.707;
-						goal_pose.pose.orientation.z = 0.0;
-						geometry_msgs::TransformStamped tfStamped;
-						tf2::doTransform(part_pose, goal_pose, tfStamped);
-						//tf2_ros::Buffer.lookupTransform("to_frame", "from_frame", "how_recent", "how_long_to_wait_for_transform");
-						try {
-							tfStamped = tfBuffer.lookupTransform("arm1_base_link", cameraName, ros::Time::now(), ros::Duration(1.0));
-							ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(), tfStamped.child_frame_id.c_str());
-						}
-						catch (tf2::TransformException& ex) {
-							ROS_ERROR("%s", ex.what());
-						}
+						//goal_pose = part_pose;
+						
 						joint_trajectory.header.seq = count++;
 						joint_trajectory.header.stamp = ros::Time::now() + ros::Duration(1);
 						joint_trajectory.header.frame_id = "/world";
 						joint_trajectory_as.action_goal.header = joint_trajectory.header;
 						joint_trajectory.joint_names.clear();
+						joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
+						joint_trajectory.joint_names.push_back("shoulder_pan_joint");
+						joint_trajectory.joint_names.push_back("shoulder_lift_joint");
+						joint_trajectory.joint_names.push_back("elbow_joint");
+						joint_trajectory.joint_names.push_back("wrist_1_joint");
+						joint_trajectory.joint_names.push_back("wrist_2_joint");
+						joint_trajectory.joint_names.push_back("wrist_3_joint");
+						/*
 						joint_trajectory.joint_names.push_back("elbow_joint");
 						joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
 						joint_trajectory.joint_names.push_back("shoulder_lift_joint");
@@ -378,6 +431,7 @@ int main(int argc, char** argv) {
 						joint_trajectory.joint_names.push_back("wrist_1_joint");
 						joint_trajectory.joint_names.push_back("wrist_2_joint");
 						joint_trajectory.joint_names.push_back("wrist_3_joint"); 
+						 */
 						joint_trajectory.points.resize(2);
 						joint_trajectory.points[0].positions.resize(joint_trajectory.joint_names.size());
 						for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++) {
